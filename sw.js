@@ -1,5 +1,5 @@
 /* Change VERSION whenever any application asset changes. */
-const VERSION = 'v1';
+const VERSION = 'v3';
 const PREFIX = `habit-tracker:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ESSENTIAL = ['./index.html', './app.js', './model.js', './styles.css', './manifest.webmanifest', './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png'];

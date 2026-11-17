@@ -11,7 +11,7 @@ const quick = document.querySelector("#quick");
 const toast = document.querySelector("#toast");
 const storageKey = `habit-tracker:v1:${new URL("./", location.href).pathname}`;
 const stateKey = `${storageKey}:data`;
-const themeKey = `${storageKey}:theme`;
+const themeKey = `${storageKey}:appearance:graphite`;
 const weekNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const statusNames = {
   done: "Выполнено", off: "Выполнено вне плана", missed: "Пропущено",
@@ -19,6 +19,7 @@ const statusNames = {
 };
 const symbols = {
   plus: '<path d="M12 5v14M5 12h14"/>',
+  circle: '<circle cx="12" cy="12" r="8"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
   focus: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="m8 13 3 3 5-6M7 2v4m10-4v4"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4m8-4v4m-8 8h2m4 0h2"/>',
@@ -57,12 +58,12 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 
 let storageProblem = "";
 let state = createState();
-let theme = "system";
+let theme = "dark";
 try {
   const raw = localStorage.getItem(stateKey);
   if (raw) state = validateState(JSON.parse(raw));
   const savedTheme = localStorage.getItem(themeKey);
-  if (["light", "dark"].includes(savedTheme)) theme = savedTheme;
+  if (["system", "light", "dark"].includes(savedTheme)) theme = savedTheme;
 } catch {
   storageProblem = "Не удалось прочитать сохраненные данные. Восстановите их из резервной копии.";
 }
@@ -159,10 +160,10 @@ function regularCard(habit, today) {
     <div class="habit-row">
       ${cardIcon(habit)}
       ${button("edit", `<strong>${title}</strong><small>Серия ${streak(habit, today)}</small>`, `class="habit-main" data-id="${id}"`)}
-      ${miniMap(habit, today)}
-      ${iconButton("toggle", done ? "check" : "plus", `Отметить выполнение привычки «${habit.title}»`,
+      ${iconButton("toggle", done ? "check" : "circle", `${done ? "Отменить выполнение" : "Отметить выполнение"} привычки «${habit.title}»`,
           `class="complete${done ? " is-done" : ""}" aria-pressed="${done}" data-id="${id}"`)}
     </div>
+    ${miniMap(habit, today)}
   </article>`;
 }
 
@@ -219,7 +220,7 @@ function renderToday() {
     const day = shiftDay(monday, i);
     return `<div class="day${day === today ? " is-today" : ""}" aria-label="${escape(longDay(day))}"${day === today ? ' aria-current="date"' : ""}><span>${name}</span><b>${Number(day.slice(-2))}</b></div>`;
   }).join("");
-  const progress = regular.length ? `<div class="hero-stat"><strong>${completed}<span>/${regular.length}</span></strong><span>выполнено</span></div>
+  const progress = regular.length ? `<div class="hero-stat"><span>Привычки на сегодня</span><strong>${completed}<span>/${regular.length}</span></strong></div>
     <div class="progress-track" role="progressbar" aria-label="Выполнено привычек" aria-valuenow="${completed}" aria-valuemax="${regular.length}"><span style="width:${completed / regular.length * 100}%"></span></div>` : "";
   return `<header class="hero">
     <div class="hero-meta"><span>${escape(capitalize(formatDay(today, { weekday: "long", day: "numeric", month: "long" })))}</span>
@@ -228,7 +229,7 @@ function renderToday() {
   </header>
   <div id="due-reminders" aria-live="polite"></div>
   <section class="section">
-    <div class="section-heading"><h2>Привычки на сегодня</h2></div>
+    <div class="section-heading"><h2>Мои привычки</h2>${regular.length ? `<span>Выполнено ${completed} из ${regular.length}</span>` : ""}</div>
     ${regular.map((habit) => regularCard(habit, today)).join("")}
     ${quits.map((habit) => quitCard(habit, today)).join("")}
     ${regular.length || quits.length ? "" : `<div class="empty">${icon("spark")}<p>${active.length ? "На сегодня ничего не запланировано" : "Добавьте первую привычку"}</p>${button("new", "Добавить привычку", 'class="button secondary"')}</div>`}
@@ -302,8 +303,11 @@ function renderHabits() {
   const archived = state.habits.filter((habit) => habit.archivedAt);
   return `<header class="page-header"><h1>Привычки</h1>${iconButton("settings", "settings", "Настройки", 'class="icon-button"')}</header>
     <section class="section"><div class="section-heading"><h2>Активные</h2></div>
-      ${active.length ? `<div class="list-card">${rows(active)}</div>` : '<div class="empty">Пока нет активных привычек</div>'}
-      ${button("new", `${icon("plus")} Добавить привычку`, 'class="button primary"')}</section>
+      ${active.length ? `<div class="list-card">${rows(active)}</div>
+        <div class="collection-actions">${button("new", `${icon("plus")} Добавить привычку`, 'class="button primary"')}</div>` :
+        `<div class="empty collection-empty"><span class="empty-icon">${icon("spark")}</span>
+          <h3>Пока нет активных привычек</h3><p>Создай первую привычку и выбери дни для нее.</p>
+          ${button("new", `${icon("plus")} Добавить привычку`, 'class="button primary"')}</div>`}</section>
     ${archived.length ? `<section class="section"><div class="section-heading"><h2>Архив</h2></div><div class="list-card">${rows(archived)}</div></section>` : ""}`;
 }
 
@@ -561,18 +565,35 @@ function showJournal(habit, key = "") {
 }
 
 function settingsSheet() {
-  openSheet("settings", "Настройки", `<label class="field">Оформление
-    <select data-control="theme">${[["system", "Как на устройстве"], ["light", "Светлое"], ["dark", "Темное"]].map(([key, name]) =>
-      `<option value="${key}"${key === theme ? " selected" : ""}>${name}</option>`).join("")}</select></label>
-    <section class="section"><h3>Резервная копия</h3><p class="subtle">Записи хранятся на этом устройстве. Сохрани копию, чтобы перенести их.</p>
-    <div class="form-actions">${button("export", "Скачать копию", 'class="button secondary"')}
-    <label class="button secondary file-label">Восстановить<input class="sr-only" type="file" accept=".json,application/json" data-control="restore"></label></div></section>
-    <p class="subtle">В Safari открой меню «Поделиться» и добавь приложение на экран «Домой».</p>`);
+  openSheet("settings", "Настройки", `<div class="settings-content">
+    <section class="settings-section" aria-labelledby="appearance-title">
+      <h3 id="appearance-title">Оформление</h3>
+      <label class="field">Тема приложения
+        <select data-control="theme">${[["dark", "Графит и цитрон"], ["light", "Светлая"], ["system", "Как на устройстве"]].map(([key, name]) =>
+          `<option value="${key}"${key === theme ? " selected" : ""}>${name}</option>`).join("")}</select>
+      </label>
+    </section>
+    <section class="settings-section" aria-labelledby="backup-title">
+      <h3 id="backup-title">Резервная копия</h3>
+      <p class="subtle">Записи хранятся на этом устройстве. Сохрани копию, чтобы перенести их.</p>
+      <div class="backup-actions">${button("export", "Скачать копию", 'class="button secondary"')}
+        <label class="button secondary file-label">Восстановить<input class="sr-only" type="file" accept=".json,application/json" data-control="restore"></label>
+      </div>
+    </section>
+    <section class="settings-section install-guide" aria-labelledby="install-title">
+      <span class="settings-symbol">${icon("plus")}</span>
+      <div><h3 id="install-title">На экран «Домой»</h3>
+        <p class="subtle">В Safari открой меню «Поделиться» и выбери «На экран Домой».</p>
+      </div>
+    </section>
+  </div>`);
 }
 
 function applyTheme() {
   if (theme === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
+  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelector('meta[name="theme-color"]').content = dark ? "#171b16" : "#f3f5ee";
 }
 
 function exportData() {
@@ -799,10 +820,13 @@ window.addEventListener("storage", (event) => {
   }
 });
 applyTheme();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (theme === "system") applyTheme();
+});
 render();
 setInterval(updateTimer, 1000);
 setInterval(refresh, 30_000);
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch((error) => console.warn("Не удалось настроить офлайн-доступ", error));
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch((error) => console.warn("Не удалось настроить офлайн-доступ", error));
 }
